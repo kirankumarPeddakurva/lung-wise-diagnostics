@@ -1,18 +1,30 @@
 import { useState, useRef } from "react";
 import { diagnoseImage, saveHistory, type DiagnosisResult } from "@/lib/mockData";
 import MoleculeViewer from "@/components/MoleculeViewer";
-import { Upload, Loader2, AlertTriangle, FlaskConical, Atom, ChevronDown, ChevronUp } from "lucide-react";
+import { Upload, Loader2, AlertTriangle, FlaskConical, Atom, ChevronDown, ChevronUp, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+const VALID_KEYWORDS = ["lung", "ct", "scan", "chest", "thorax", "pulmonary", "dicom"];
+
+const validateLungCTScan = (fileName: string): boolean => {
+  const lower = fileName.toLowerCase();
+  return VALID_KEYWORDS.some((kw) => lower.includes(kw));
+};
 
 const UploadResults = () => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DiagnosisResult | null>(null);
   const [expandedDrug, setExpandedDrug] = useState<number | null>(0);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string>("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = (file: File) => {
+    setValidationError(null);
+    setFileName(file.name);
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
@@ -30,6 +42,14 @@ const UploadResults = () => {
 
   const runDiagnosis = async () => {
     if (!imageUrl) return;
+
+    // Mock AI validation step
+    if (!validateLungCTScan(fileName)) {
+      setValidationError("Invalid image. Please upload a valid lung CT scan image.");
+      return;
+    }
+
+    setValidationError(null);
     setLoading(true);
     const res = await diagnoseImage(imageUrl);
     setResult(res);
@@ -120,6 +140,15 @@ const UploadResults = () => {
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {/* Validation Error */}
+          {validationError && (
+            <Alert variant="destructive" className="animate-fade-in-up">
+              <XCircle className="h-4 w-4" />
+              <AlertTitle>Validation Failed</AlertTitle>
+              <AlertDescription>{validationError}</AlertDescription>
+            </Alert>
           )}
 
           {/* Diagnosis Result */}
