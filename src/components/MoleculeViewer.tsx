@@ -86,9 +86,12 @@ const MoleculeViewer = ({ drug }: MoleculeViewerProps) => {
         cy + atom.py,
         size
       );
-      gradient.addColorStop(0, atom.color + "ff");
-      gradient.addColorStop(0.7, atom.color + "cc");
-      gradient.addColorStop(1, atom.color + "66");
+      const hex = atom.color.length === 4
+        ? "#" + atom.color[1] + atom.color[1] + atom.color[2] + atom.color[2] + atom.color[3] + atom.color[3]
+        : atom.color;
+      gradient.addColorStop(0, hex + "ff");
+      gradient.addColorStop(0.7, hex + "cc");
+      gradient.addColorStop(1, hex + "66");
 
       ctx.beginPath();
       ctx.arc(cx + atom.px, cy + atom.py, Math.max(size, 4), 0, Math.PI * 2);
