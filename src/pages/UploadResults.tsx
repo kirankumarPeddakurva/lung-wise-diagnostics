@@ -195,8 +195,12 @@ const UploadResults = () => {
                   )}
                 </div>
                 <div className="p-4 flex gap-3">
-                  <Button onClick={runDiagnosis} disabled={loading} className="flex-1">
-                    {loading ? (
+                  <Button onClick={runDiagnosis} disabled={loading || validating} className="flex-1">
+                    {validating ? (
+                      <>
+                        <ScanSearch className="w-4 h-4 mr-2 animate-pulse" /> Validating image...
+                      </>
+                    ) : loading ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Analyzing...
                       </>
