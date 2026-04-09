@@ -3,7 +3,7 @@ import { login, register } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Activity, Lung } from "lucide-react";
+import { Activity } from "lucide-react";
 
 interface AuthPageProps {
   onAuth: () => void;
