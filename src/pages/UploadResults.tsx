@@ -142,6 +142,15 @@ const UploadResults = () => {
             </Card>
           )}
 
+          {/* Validation Error */}
+          {validationError && (
+            <Alert variant="destructive" className="animate-fade-in-up">
+              <XCircle className="h-4 w-4" />
+              <AlertTitle>Validation Failed</AlertTitle>
+              <AlertDescription>{validationError}</AlertDescription>
+            </Alert>
+          )}
+
           {/* Diagnosis Result */}
           {result && (
             <Card className="glass-card animate-fade-in-up">
