@@ -33,7 +33,7 @@ interface LungValidationResult {
   };
 }
 
-const CONFIDENCE_THRESHOLD = 85;
+const CONFIDENCE_THRESHOLD = 80;
 
 const analyzeRegion = (
   data: Uint8ClampedArray,
@@ -185,27 +185,37 @@ export const analyzeLungStructure = (imageUrl: string): Promise<LungValidationRe
 
       // --- 6. Compute segmentation mask confidence ---
       let confidence = 0;
+      const atLeastOneLung = leftLungDetected || rightLungDetected;
 
       // Grayscale (required for CT)
       if (isGrayscale) confidence += 15;
       else confidence -= 20;
 
-      // Both lung lobes detected
+      // Lung lobe detection (accept partial single-lung slices)
       if (leftLungDetected && rightLungDetected) confidence += 25;
-      else if (leftLungDetected || rightLungDetected) confidence += 10;
+      else if (atLeastOneLung) confidence += 18;
 
-      // Symmetry (lung CT scans are roughly symmetrical)
-      confidence += Math.round(symmetryScore * 20);
+      // Lung tissue quality — dark air-filled regions present
+      const avgDarkRatio = (leftLobe.darkRatio + rightLobe.darkRatio) / 2;
+      if (avgDarkRatio > 0.2) confidence += 10;
+      else if (avgDarkRatio > 0.1) confidence += 5;
+
+      // Symmetry (bonus for full scans, not penalised for partial)
+      if (leftLungDetected && rightLungDetected) {
+        confidence += Math.round(symmetryScore * 15);
+      } else if (atLeastOneLung) {
+        confidence += Math.round(symmetryScore * 8);
+      }
 
       // Thoracic boundary (dark edges)
       if (thoracicBoundary) confidence += 15;
 
       // Central mediastinum brighter than lung fields
-      if (centralAirspace) confidence += 15;
+      if (centralAirspace) confidence += 12;
 
       // Contrast and structure within lung fields
       const lobeContrast = Math.abs(leftLobe.meanBrightness - rightLobe.meanBrightness);
-      if (lobeContrast < 30) confidence += 10; // lobes should be similar brightness
+      if (lobeContrast < 30) confidence += 10;
 
       confidence = Math.max(0, Math.min(100, confidence));
 
