@@ -49,7 +49,7 @@ const UploadResults = () => {
 
     if (!validation.valid) {
       setValidationError(
-        "Invalid input: The image does not contain recognizable lung CT scan structures. Please upload a clear lung CT scan."
+        "Invalid input: The image does not contain clear lung CT scan structures. Please upload a proper lung CT image."
       );
       return;
     }
