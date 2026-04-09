@@ -42,14 +42,14 @@ const UploadResults = () => {
     setValidationError(null);
     setValidating(true);
     
-    // Simulate processing delay for realism
-    await new Promise((r) => setTimeout(r, 1500));
-    const validation = await analyzeImageContent(imageUrl);
+    // Simulate UNETR segmentation model processing delay
+    await new Promise((r) => setTimeout(r, 2000));
+    const validation = await analyzeLungStructure(imageUrl);
     setValidating(false);
 
     if (!validation.valid) {
       setValidationError(
-        "Invalid input: The uploaded image is not a valid lung CT scan or is not clearly visible. Please upload a proper lung CT image."
+        "Invalid input: The image does not contain recognizable lung CT scan structures. Please upload a clear lung CT scan."
       );
       return;
     }
