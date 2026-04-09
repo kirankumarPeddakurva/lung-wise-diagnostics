@@ -323,11 +323,21 @@ const UploadResults = () => {
           </div>
         )}
 
-        {!result && !loading && imageUrl && (
+        {!result && !loading && !validating && imageUrl && (
           <div className="flex items-center justify-center text-center p-12">
             <div>
               <Atom className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
               <p className="text-muted-foreground">Click "Run AI Diagnosis" to analyze the scan</p>
+            </div>
+          </div>
+        )}
+
+        {validating && (
+          <div className="flex items-center justify-center p-12">
+            <div className="text-center">
+              <ScanSearch className="w-16 h-16 text-primary animate-pulse mx-auto mb-4" />
+              <p className="text-foreground font-medium">Validating Image...</p>
+              <p className="text-sm text-muted-foreground">Checking for lung CT scan structures</p>
             </div>
           </div>
         )}
