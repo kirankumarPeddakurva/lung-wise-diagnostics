@@ -1,12 +1,12 @@
 /**
  * Simulated UNETR-like Lung Segmentation Validator
  * 
- * Mimics a deep learning segmentation model that detects lung anatomical structures:
+ * Detects lung anatomical structures and explicitly rejects non-lung scans
+ * (e.g., brain/cranial CTs). Checks for:
  * - Left and right lung lobes
- * - Symmetrical chest cavity layout
- * - Rib cage / thoracic boundary patterns
+ * - Thoracic boundary / rib cage patterns
  * - Central darker regions (lung air spaces)
- * - Lung segmentation mask confidence
+ * - Brain/skull detection (force reject)
  * 
  * Threshold: validation confidence must be >= 85% to proceed.
  */
@@ -17,23 +17,26 @@ interface RegionStats {
   mediumRatio: number;
   lightRatio: number;
   grayscaleRatio: number;
+  brightRatio: number;
   pixelCount: number;
 }
 
 interface LungValidationResult {
   valid: boolean;
   confidence: number;
+  rejectionReason?: string;
   details: {
     leftLungDetected: boolean;
     rightLungDetected: boolean;
     symmetryScore: number;
     thoracicBoundary: boolean;
     centralAirspace: boolean;
+    brainDetected: boolean;
     segmentationMaskConfidence: number;
   };
 }
 
-const CONFIDENCE_THRESHOLD = 80;
+const CONFIDENCE_THRESHOLD = 85;
 
 const analyzeRegion = (
   data: Uint8ClampedArray,
@@ -45,6 +48,7 @@ const analyzeRegion = (
   let darkPx = 0;
   let medPx = 0;
   let lightPx = 0;
+  let brightPx = 0;
   let grayPx = 0;
   let count = 0;
 
@@ -59,6 +63,7 @@ const analyzeRegion = (
       if (brightness < 50) darkPx++;
       else if (brightness < 160) medPx++;
       else lightPx++;
+      if (brightness > 200) brightPx++;
       if (saturation < 35) grayPx++;
       count++;
     }
@@ -69,14 +74,75 @@ const analyzeRegion = (
     darkRatio: count > 0 ? darkPx / count : 0,
     mediumRatio: count > 0 ? medPx / count : 0,
     lightRatio: count > 0 ? lightPx / count : 0,
+    brightRatio: count > 0 ? brightPx / count : 0,
     grayscaleRatio: count > 0 ? grayPx / count : 0,
     pixelCount: count,
   };
 };
 
 /**
- * Simulates detecting the thoracic boundary by checking if the image edges
- * (top/bottom rows) are predominantly dark (body exterior / background).
+ * Detects brain/skull structures — cranial CTs have:
+ * - A roughly circular bright bone boundary (skull)
+ * - Central medium-brightness tissue (brain parenchyma)
+ * - NO large dark air-filled regions in the center
+ * - High bright-ring ratio around the perimeter
+ */
+const detectBrainStructure = (
+  data: Uint8ClampedArray,
+  size: number
+): boolean => {
+  const center = Math.floor(size / 2);
+  const outerRadius = Math.floor(size * 0.42);
+  const innerRadius = Math.floor(size * 0.3);
+  const shellRadius = Math.floor(size * 0.38);
+
+  let shellBright = 0;
+  let shellTotal = 0;
+  let coreDark = 0;
+  let coreMedium = 0;
+  let coreTotal = 0;
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = x - center;
+      const dy = y - center;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > outerRadius) continue;
+
+      const idx = (y * size + x) * 4;
+      const brightness = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+
+      // Shell region (between inner and outer radius) — skull bone
+      if (dist >= shellRadius && dist <= outerRadius) {
+        if (brightness > 180) shellBright++;
+        shellTotal++;
+      }
+
+      // Core region — brain tissue
+      if (dist < innerRadius) {
+        if (brightness < 50) coreDark++;
+        else if (brightness >= 50 && brightness < 180) coreMedium++;
+        coreTotal++;
+      }
+    }
+  }
+
+  const shellBrightRatio = shellTotal > 0 ? shellBright / shellTotal : 0;
+  const coreDarkRatio = coreTotal > 0 ? coreDark / coreTotal : 0;
+  const coreMediumRatio = coreTotal > 0 ? coreMedium / coreTotal : 0;
+
+  // Brain pattern: bright circular shell + mostly medium-brightness core + low dark core
+  const hasBrightSkull = shellBrightRatio > 0.3;
+  const hasBrainTissue = coreMediumRatio > 0.5;
+  const lacksLungAir = coreDarkRatio < 0.15;
+
+  return hasBrightSkull && hasBrainTissue && lacksLungAir;
+};
+
+/**
+ * Detects thoracic boundary by checking if image edges have dark background
+ * AND the overall shape is more oval/rectangular (not circular like a skull).
  */
 const detectThoracicBoundary = (
   data: Uint8ClampedArray,
@@ -86,7 +152,6 @@ const detectThoracicBoundary = (
   let edgeDark = 0;
   let edgeTotal = 0;
 
-  // Check top 10% and bottom 10% rows, left 10% and right 10% columns
   const bands = [
     { x0: 0, y0: 0, x1: width, y1: Math.floor(height * 0.1) },
     { x0: 0, y0: Math.floor(height * 0.9), x1: width, y1: height },
@@ -108,10 +173,6 @@ const detectThoracicBoundary = (
   return edgeTotal > 0 && edgeDark / edgeTotal > 0.5;
 };
 
-/**
- * Detects vertical symmetry — lung CT scans have roughly symmetrical
- * left and right lung fields.
- */
 const computeSymmetry = (
   data: Uint8ClampedArray,
   width: number,
@@ -135,7 +196,6 @@ const computeSymmetry = (
   }
 
   const avgDiff = count > 0 ? diff / count : 255;
-  // Perfect symmetry → avgDiff=0 → score=1, high asymmetry → score→0
   return Math.max(0, 1 - avgDiff / 80);
 };
 
@@ -152,23 +212,42 @@ export const analyzeLungStructure = (imageUrl: string): Promise<LungValidationRe
       ctx.drawImage(img, 0, 0, size, size);
       const data = ctx.getImageData(0, 0, size, size).data;
 
-      // --- 1. Global grayscale check (CT scans are monochrome) ---
+      // --- 0. Brain/skull detection (force reject) ---
+      const brainDetected = detectBrainStructure(data, size);
+
+      if (brainDetected) {
+        resolve({
+          valid: false,
+          confidence: 0,
+          rejectionReason: "brain_detected",
+          details: {
+            leftLungDetected: false,
+            rightLungDetected: false,
+            symmetryScore: 0,
+            thoracicBoundary: false,
+            centralAirspace: false,
+            brainDetected: true,
+            segmentationMaskConfidence: 0,
+          },
+        });
+        return;
+      }
+
+      // --- 1. Global grayscale check ---
       const global = analyzeRegion(data, size, 0, 0, size, size);
       const isGrayscale = global.grayscaleRatio > 0.65;
 
       // --- 2. Detect left and right lung lobes ---
-      // Lung fields sit roughly in the middle-horizontal band, left and right of center
       const lobeY0 = Math.floor(size * 0.2);
       const lobeY1 = Math.floor(size * 0.8);
       const midX = Math.floor(size / 2);
       const leftLobe = analyzeRegion(data, size, Math.floor(size * 0.1), lobeY0, midX - 2, lobeY1);
       const rightLobe = analyzeRegion(data, size, midX + 2, lobeY0, Math.floor(size * 0.9), lobeY1);
 
-      // Lung lobes should have dark air-space regions mixed with medium-brightness tissue
       const leftLungDetected = leftLobe.darkRatio > 0.15 && leftLobe.mediumRatio > 0.1 && leftLobe.grayscaleRatio > 0.6;
       const rightLungDetected = rightLobe.darkRatio > 0.15 && rightLobe.mediumRatio > 0.1 && rightLobe.grayscaleRatio > 0.6;
 
-      // --- 3. Central airspace (mediastinum — bright central column) ---
+      // --- 3. Central airspace (mediastinum) ---
       const centralRegion = analyzeRegion(
         data, size,
         Math.floor(size * 0.4), Math.floor(size * 0.2),
@@ -183,51 +262,49 @@ export const analyzeLungStructure = (imageUrl: string): Promise<LungValidationRe
       // --- 5. Symmetry ---
       const symmetryScore = computeSymmetry(data, size, size);
 
-      // --- 6. Compute segmentation mask confidence ---
+      // --- 6. Compute confidence ---
       let confidence = 0;
       const atLeastOneLung = leftLungDetected || rightLungDetected;
 
-      // Grayscale (required for CT)
       if (isGrayscale) confidence += 15;
       else confidence -= 20;
 
-      // Lung lobe detection (accept partial single-lung slices)
       if (leftLungDetected && rightLungDetected) confidence += 25;
       else if (atLeastOneLung) confidence += 18;
 
-      // Lung tissue quality — dark air-filled regions present
       const avgDarkRatio = (leftLobe.darkRatio + rightLobe.darkRatio) / 2;
       if (avgDarkRatio > 0.2) confidence += 10;
       else if (avgDarkRatio > 0.1) confidence += 5;
 
-      // Symmetry (bonus for full scans, not penalised for partial)
       if (leftLungDetected && rightLungDetected) {
         confidence += Math.round(symmetryScore * 15);
       } else if (atLeastOneLung) {
         confidence += Math.round(symmetryScore * 8);
       }
 
-      // Thoracic boundary (dark edges)
       if (thoracicBoundary) confidence += 15;
 
-      // Central mediastinum brighter than lung fields
       if (centralAirspace) confidence += 12;
 
-      // Contrast and structure within lung fields
       const lobeContrast = Math.abs(leftLobe.meanBrightness - rightLobe.meanBrightness);
       if (lobeContrast < 30) confidence += 10;
 
       confidence = Math.max(0, Math.min(100, confidence));
 
+      // Must have at least one lung AND thoracic boundary
+      const structurallyValid = atLeastOneLung && thoracicBoundary;
+
       resolve({
-        valid: confidence >= CONFIDENCE_THRESHOLD,
+        valid: structurallyValid && confidence >= CONFIDENCE_THRESHOLD,
         confidence,
+        rejectionReason: !atLeastOneLung ? "no_lung_structures" : !thoracicBoundary ? "no_thoracic_boundary" : undefined,
         details: {
           leftLungDetected,
           rightLungDetected,
           symmetryScore: Math.round(symmetryScore * 100),
           thoracicBoundary,
           centralAirspace,
+          brainDetected: false,
           segmentationMaskConfidence: confidence,
         },
       });
@@ -242,6 +319,7 @@ export const analyzeLungStructure = (imageUrl: string): Promise<LungValidationRe
           symmetryScore: 0,
           thoracicBoundary: false,
           centralAirspace: false,
+          brainDetected: false,
           segmentationMaskConfidence: 0,
         },
       });
