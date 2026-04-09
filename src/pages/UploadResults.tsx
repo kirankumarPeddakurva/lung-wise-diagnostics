@@ -1,81 +1,11 @@
 import { useState, useRef } from "react";
 import { diagnoseImage, saveHistory, type DiagnosisResult } from "@/lib/mockData";
+import { analyzeLungStructure } from "@/lib/lungValidator";
 import MoleculeViewer from "@/components/MoleculeViewer";
 import { Upload, Loader2, AlertTriangle, FlaskConical, Atom, ChevronDown, ChevronUp, XCircle, ScanSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
-/**
- * Simulated AI-based image validation.
- * Analyzes image pixel data to check for lung CT scan characteristics:
- * - Grayscale dominance (CT scans are mostly grayscale)
- * - Dark background with lighter tissue (typical CT pattern)
- * - Sufficient contrast range
- */
-const analyzeImageContent = (imageUrl: string): Promise<{ valid: boolean; confidence: number }> => {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const size = 100; // downsample for performance
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0, size, size);
-      const data = ctx.getImageData(0, 0, size, size).data;
-
-      let grayscalePixels = 0;
-      let darkPixels = 0;
-      let lightPixels = 0;
-      let totalPixels = size * size;
-      let minBrightness = 255;
-      let maxBrightness = 0;
-
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i], g = data[i + 1], b = data[i + 2];
-        const brightness = (r + g + b) / 3;
-
-        // Check if pixel is roughly grayscale (low color saturation)
-        const maxC = Math.max(r, g, b);
-        const minC = Math.min(r, g, b);
-        if (maxC - minC < 40) grayscalePixels++;
-
-        if (brightness < 60) darkPixels++;
-        if (brightness > 150) lightPixels++;
-        if (brightness < minBrightness) minBrightness = brightness;
-        if (brightness > maxBrightness) maxBrightness = brightness;
-      }
-
-      const grayscaleRatio = grayscalePixels / totalPixels;
-      const darkRatio = darkPixels / totalPixels;
-      const contrastRange = maxBrightness - minBrightness;
-      const lightRatio = lightPixels / totalPixels;
-
-      // CT scan heuristics:
-      // 1. Mostly grayscale (>70%)
-      // 2. Significant dark regions (background, >20%)
-      // 3. Good contrast range (>80)
-      // 4. Not entirely white or entirely dark
-      let score = 0;
-      if (grayscaleRatio > 0.7) score += 35;
-      else if (grayscaleRatio > 0.5) score += 15;
-
-      if (darkRatio > 0.2 && darkRatio < 0.85) score += 25;
-
-      if (contrastRange > 80) score += 20;
-      else if (contrastRange > 40) score += 10;
-
-      if (lightRatio > 0.05 && lightRatio < 0.6) score += 20;
-
-      const valid = score >= 60;
-      resolve({ valid, confidence: Math.min(score, 100) });
-    };
-    img.onerror = () => resolve({ valid: false, confidence: 0 });
-    img.src = imageUrl;
-  });
-};
 
 const UploadResults = () => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -112,14 +42,14 @@ const UploadResults = () => {
     setValidationError(null);
     setValidating(true);
     
-    // Simulate processing delay for realism
-    await new Promise((r) => setTimeout(r, 1500));
-    const validation = await analyzeImageContent(imageUrl);
+    // Simulate UNETR segmentation model processing delay
+    await new Promise((r) => setTimeout(r, 2000));
+    const validation = await analyzeLungStructure(imageUrl);
     setValidating(false);
 
     if (!validation.valid) {
       setValidationError(
-        "Invalid input: The uploaded image is not a valid lung CT scan or is not clearly visible. Please upload a proper lung CT image."
+        "Invalid input: The image does not contain recognizable lung CT scan structures. Please upload a clear lung CT scan."
       );
       return;
     }
@@ -336,8 +266,8 @@ const UploadResults = () => {
           <div className="flex items-center justify-center p-12">
             <div className="text-center">
               <ScanSearch className="w-16 h-16 text-primary animate-pulse mx-auto mb-4" />
-              <p className="text-foreground font-medium">Validating Image...</p>
-              <p className="text-sm text-muted-foreground">Checking for lung CT scan structures</p>
+              <p className="text-foreground font-medium">Analyzing lung structure...</p>
+              <p className="text-sm text-muted-foreground">Running UNETR segmentation model to detect lung anatomy</p>
             </div>
           </div>
         )}
