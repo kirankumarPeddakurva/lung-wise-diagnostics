@@ -151,7 +151,7 @@ export const preprocessImage = (
       const denoised = applyMedianFilter(normalized, size, size);
 
       // Write back processed data
-      const imageData = new ImageData(denoised, size, size);
+      const imageData = new ImageData(new Uint8ClampedArray(denoised.buffer), size, size);
       ctx.putImageData(imageData, 0, 0);
 
       resolve({ data: denoised, canvas });
