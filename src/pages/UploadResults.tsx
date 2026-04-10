@@ -49,7 +49,7 @@ const UploadResults = () => {
     if (!validation.valid) {
       const msg = validation.rejectionReason === "brain_detected"
         ? "Invalid input: The image appears to be a non-lung scan (e.g., brain or unrelated). Please upload a valid lung CT scan."
-        : "Invalid input: The image does not contain clear lung CT scan structures. Please upload a proper lung CT image.";
+        : "Invalid input: The uploaded image is not a valid lung CT scan or is not clearly visible. Please upload a proper lung CT image.";
       setValidationError(msg);
       return;
     }
