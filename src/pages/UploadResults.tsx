@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { diagnoseImage, saveHistory, type DiagnosisResult } from "@/lib/mockData";
 import { analyzeLungStructure } from "@/lib/lungValidator";
 import MoleculeViewer from "@/components/MoleculeViewer";
-import { Upload, Loader2, AlertTriangle, FlaskConical, Atom, ChevronDown, ChevronUp, XCircle, ScanSearch } from "lucide-react";
+import { Upload, Loader2, AlertTriangle, FlaskConical, Atom, ChevronDown, ChevronUp, XCircle, ScanSearch, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -38,11 +38,10 @@ const UploadResults = () => {
   const runDiagnosis = async () => {
     if (!imageUrl) return;
 
-    // Step 1: Simulated AI image validation
     setValidationError(null);
     setValidating(true);
-    
-    // Simulate UNETR segmentation model processing delay
+
+    // Simulate UNETR segmentation model processing (includes preprocessing)
     await new Promise((r) => setTimeout(r, 2000));
     const validation = await analyzeLungStructure(imageUrl);
     setValidating(false);
@@ -50,12 +49,11 @@ const UploadResults = () => {
     if (!validation.valid) {
       const msg = validation.rejectionReason === "brain_detected"
         ? "Invalid input: The image appears to be a non-lung scan (e.g., brain or unrelated). Please upload a valid lung CT scan."
-        : "Invalid input: The image does not contain recognizable lung CT scan structures. Please upload a clear lung CT scan.";
+        : "Invalid input: The image does not contain clear lung CT scan structures. Please upload a proper lung CT image.";
       setValidationError(msg);
       return;
     }
 
-    // Step 2: Run diagnosis
     setLoading(true);
     const res = await diagnoseImage(imageUrl);
     setResult(res);
@@ -106,8 +104,7 @@ const UploadResults = () => {
               <CardContent className="p-0">
                 <div className="relative">
                   <img src={imageUrl} alt="Uploaded CT Scan" className="w-full" />
-                  {/* Red mark overlay */}
-                  {result && (
+                  {result && !result.isHealthy && (
                     <div
                       className="absolute border-2 border-destructive rounded-md animate-pulse"
                       style={{
@@ -129,7 +126,7 @@ const UploadResults = () => {
                   <Button onClick={runDiagnosis} disabled={loading || validating} className="flex-1">
                     {validating ? (
                       <>
-                        <ScanSearch className="w-4 h-4 mr-2 animate-pulse" /> Validating image...
+                        <ScanSearch className="w-4 h-4 mr-2 animate-pulse" /> Analyzing structure...
                       </>
                     ) : loading ? (
                       <>
@@ -143,7 +140,7 @@ const UploadResults = () => {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => { setImageUrl(null); setResult(null); }}
+                    onClick={() => { setImageUrl(null); setResult(null); setValidationError(null); }}
                   >
                     Clear
                   </Button>
@@ -166,37 +163,61 @@ const UploadResults = () => {
             <Card className="glass-card animate-fade-in-up">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 font-display text-foreground">
-                  <AlertTriangle className="w-5 h-5 text-warning" />
+                  {result.isHealthy ? (
+                    <ShieldCheck className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5 text-warning" />
+                  )}
                   Diagnosis Result
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-xl bg-destructive/10 border border-destructive/20">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Detected Disease</p>
-                    <p className="text-xl font-bold text-destructive">{result.disease}</p>
+                {result.isHealthy ? (
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-green-500/10 border border-green-500/20">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Status</p>
+                      <p className="text-xl font-bold text-green-500">No Lung Disease Detected</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">Confidence</p>
+                      <p className="text-xl font-bold text-primary">{result.confidence}%</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground">Confidence</p>
-                    <p className="text-xl font-bold text-primary">{result.confidence}%</p>
+                ) : (
+                  <div className="flex items-center justify-between p-4 rounded-xl bg-destructive/10 border border-destructive/20">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Detected Disease</p>
+                      <p className="text-xl font-bold text-destructive">{result.disease}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground">Confidence</p>
+                      <p className="text-xl font-bold text-primary">{result.confidence}%</p>
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
                   <div
-                    className="h-full medical-gradient rounded-full transition-all duration-1000"
+                    className={`h-full rounded-full transition-all duration-1000 ${result.isHealthy ? 'bg-green-500' : 'medical-gradient'}`}
                     style={{ width: `${result.confidence}%` }}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Affected region highlighted in red on the scan image. Region: ({result.region.x}%, {result.region.y}%) - ({result.region.width}%×{result.region.height}%)
-                </p>
+                {!result.isHealthy && (
+                  <p className="text-xs text-muted-foreground">
+                    Affected region highlighted in red on the scan image. Region: ({result.region.x}%, {result.region.y}%) - ({result.region.width}%×{result.region.height}%)
+                  </p>
+                )}
+                {result.isHealthy && (
+                  <p className="text-xs text-muted-foreground">
+                    The AI analysis did not detect any abnormalities in this lung CT scan. Please consult a medical professional for a definitive diagnosis.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}
         </div>
 
         {/* Drug Discovery Panel */}
-        {result && (
+        {result && !result.isHealthy && (
           <div className="space-y-4 animate-slide-in">
             <h2 className="text-xl font-bold font-display text-foreground flex items-center gap-2">
               <FlaskConical className="w-5 h-5 text-primary" />
@@ -254,6 +275,17 @@ const UploadResults = () => {
           </div>
         )}
 
+        {/* Healthy result right panel */}
+        {result && result.isHealthy && (
+          <div className="flex items-center justify-center p-12 animate-fade-in-up">
+            <div className="text-center">
+              <ShieldCheck className="w-20 h-20 text-green-500 mx-auto mb-4" />
+              <p className="text-xl font-bold text-foreground mb-2">Healthy Scan</p>
+              <p className="text-muted-foreground">No abnormalities were detected in this CT scan. No drug recommendations are needed.</p>
+            </div>
+          </div>
+        )}
+
         {!result && !loading && !validating && imageUrl && (
           <div className="flex items-center justify-center text-center p-12">
             <div>
@@ -267,8 +299,8 @@ const UploadResults = () => {
           <div className="flex items-center justify-center p-12">
             <div className="text-center">
               <ScanSearch className="w-16 h-16 text-primary animate-pulse mx-auto mb-4" />
-              <p className="text-foreground font-medium">Analyzing lung structure...</p>
-              <p className="text-sm text-muted-foreground">Running UNETR segmentation model to detect lung anatomy</p>
+              <p className="text-foreground font-medium">Analyzing anatomical structure...</p>
+              <p className="text-sm text-muted-foreground">Preprocessing image & running UNETR segmentation model</p>
             </div>
           </div>
         )}
