@@ -32,7 +32,7 @@ export interface LungValidationResult {
   };
 }
 
-const CONFIDENCE_THRESHOLD = 85;
+const CONFIDENCE_THRESHOLD = 55;
 
 const analyzeRegion = (
   data: Uint8ClampedArray,
@@ -187,8 +187,8 @@ export const analyzeLungStructure = async (imageUrl: string): Promise<LungValida
     const leftLobe = analyzeRegion(data, size, Math.floor(size * 0.1), lobeY0, midX - 2, lobeY1);
     const rightLobe = analyzeRegion(data, size, midX + 2, lobeY0, Math.floor(size * 0.9), lobeY1);
 
-    const leftLungDetected = leftLobe.darkRatio > 0.15 && leftLobe.mediumRatio > 0.1 && leftLobe.grayscaleRatio > 0.6;
-    const rightLungDetected = rightLobe.darkRatio > 0.15 && rightLobe.mediumRatio > 0.1 && rightLobe.grayscaleRatio > 0.6;
+    const leftLungDetected = leftLobe.darkRatio > 0.08 && leftLobe.mediumRatio > 0.05 && leftLobe.grayscaleRatio > 0.4;
+    const rightLungDetected = rightLobe.darkRatio > 0.08 && rightLobe.mediumRatio > 0.05 && rightLobe.grayscaleRatio > 0.4;
 
     // Central airspace
     const centralRegion = analyzeRegion(data, size, Math.floor(size * 0.4), Math.floor(size * 0.2), Math.floor(size * 0.6), Math.floor(size * 0.8));
@@ -204,26 +204,30 @@ export const analyzeLungStructure = async (imageUrl: string): Promise<LungValida
     let confidence = 0;
     const atLeastOneLung = leftLungDetected || rightLungDetected;
 
-    if (isGrayscale) confidence += 15; else confidence -= 20;
+    if (isGrayscale) confidence += 20; else confidence -= 10;
     if (leftLungDetected && rightLungDetected) confidence += 25;
-    else if (atLeastOneLung) confidence += 18;
+    else if (atLeastOneLung) confidence += 22;
 
     const avgDarkRatio = (leftLobe.darkRatio + rightLobe.darkRatio) / 2;
-    if (avgDarkRatio > 0.2) confidence += 10;
-    else if (avgDarkRatio > 0.1) confidence += 5;
+    if (avgDarkRatio > 0.15) confidence += 12;
+    else if (avgDarkRatio > 0.05) confidence += 7;
 
     if (leftLungDetected && rightLungDetected) confidence += Math.round(symmetryScore * 15);
-    else if (atLeastOneLung) confidence += Math.round(symmetryScore * 8);
+    else if (atLeastOneLung) confidence += Math.round(symmetryScore * 10);
 
-    if (thoracicBoundary) confidence += 15;
+    if (thoracicBoundary) confidence += 18;
     if (centralAirspace) confidence += 12;
 
     const lobeContrast = Math.abs(leftLobe.meanBrightness - rightLobe.meanBrightness);
-    if (lobeContrast < 30) confidence += 10;
+    if (lobeContrast < 40) confidence += 10;
+
+    // Bonus for medical-looking images (grayscale with some dark regions)
+    if (isGrayscale && avgDarkRatio > 0.05) confidence += 8;
 
     confidence = Math.max(0, Math.min(100, confidence));
 
-    const structurallyValid = atLeastOneLung && thoracicBoundary;
+    // Accept if at least one lung detected OR thoracic boundary with grayscale medical appearance
+    const structurallyValid = atLeastOneLung || (thoracicBoundary && isGrayscale && avgDarkRatio > 0.05);
 
     return {
       valid: structurallyValid && confidence >= CONFIDENCE_THRESHOLD,
