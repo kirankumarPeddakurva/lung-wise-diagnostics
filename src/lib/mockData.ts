@@ -197,6 +197,18 @@ function simpleHash(str: string): number {
 
 const diseases: Disease[] = ["Lung Cancer", "Pneumonia", "Tuberculosis"];
 
+const regionMap: Record<Disease, { x: number; y: number; width: number; height: number }> = {
+  "Lung Cancer": { x: 55, y: 30, width: 20, height: 22 },
+  "Pneumonia": { x: 25, y: 40, width: 25, height: 20 },
+  "Tuberculosis": { x: 40, y: 25, width: 18, height: 25 },
+};
+
+const confidenceMap: Record<Disease, number> = {
+  "Lung Cancer": 94.7,
+  "Pneumonia": 91.3,
+  "Tuberculosis": 88.9,
+};
+
 export function diagnoseImage(imageDataUrl: string): Promise<DiagnosisResult> {
   return new Promise((resolve) => {
     setTimeout(() => {
