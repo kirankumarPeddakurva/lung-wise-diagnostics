@@ -8,7 +8,7 @@ export const sampleScans = [
   { id: "3", src: ctScan3, label: "CT Scan - Axial View 3" },
 ];
 
-export type Disease = "Lung Cancer" | "Pneumonia" | "Tuberculosis" | "No Lung Disease Detected";
+export type Disease = "Lung Cancer" | "Pneumonia" | "Tuberculosis";
 
 export interface Drug {
   name: string;
@@ -24,7 +24,6 @@ export interface DiagnosisResult {
   confidence: number;
   region: { x: number; y: number; width: number; height: number };
   drugs: Drug[];
-  isHealthy: boolean;
 }
 
 const drugDatabase: Record<Exclude<Disease, "No Lung Disease Detected">, Drug[]> = {
@@ -237,20 +236,6 @@ const ABNORMALITY_THRESHOLD = 35;
 export function diagnoseImage(imageDataUrl: string): Promise<DiagnosisResult> {
   return new Promise((resolve) => {
     setTimeout(() => {
-      const abnormalityScore = computeAbnormalityScore(imageDataUrl);
-
-      // If abnormality score is low → healthy lung
-      if (abnormalityScore < ABNORMALITY_THRESHOLD) {
-        resolve({
-          disease: "No Lung Disease Detected",
-          confidence: Math.round((100 - abnormalityScore) * 10) / 10,
-          region: { x: 0, y: 0, width: 0, height: 0 },
-          drugs: [],
-          isHealthy: true,
-        });
-        return;
-      }
-
       // Deterministic disease selection based on image content
       const hash = simpleHash(imageDataUrl.substring(0, 500));
       const diseaseIndex = hash % 3;
@@ -261,7 +246,6 @@ export function diagnoseImage(imageDataUrl: string): Promise<DiagnosisResult> {
         confidence: confidenceMap[disease],
         region: regionMap[disease],
         drugs: drugDatabase[disease],
-        isHealthy: false,
       });
     }, 2500);
   });
