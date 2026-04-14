@@ -251,16 +251,6 @@ const UploadResults = () => {
           </div>
         )}
 
-        {/* Healthy result right panel */}
-        {result && result.isHealthy && (
-          <div className="flex items-center justify-center p-12 animate-fade-in-up">
-            <div className="text-center">
-              <ShieldCheck className="w-20 h-20 text-green-500 mx-auto mb-4" />
-              <p className="text-xl font-bold text-foreground mb-2">Healthy Scan</p>
-              <p className="text-muted-foreground">No abnormalities were detected in this CT scan. No drug recommendations are needed.</p>
-            </div>
-          </div>
-        )}
 
         {!result && !loading && !validating && imageUrl && (
           <div className="flex items-center justify-center text-center p-12">
