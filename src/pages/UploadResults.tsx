@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { diagnoseImage, saveHistory, type DiagnosisResult } from "@/lib/mockData";
 import { analyzeLungStructure } from "@/lib/lungValidator";
 import MoleculeViewer from "@/components/MoleculeViewer";
-import { Upload, Loader2, AlertTriangle, FlaskConical, Atom, ChevronDown, ChevronUp, XCircle, ScanSearch, ShieldCheck } from "lucide-react";
+import { Upload, Loader2, AlertTriangle, FlaskConical, Atom, ChevronDown, ChevronUp, XCircle, ScanSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -104,7 +104,7 @@ const UploadResults = () => {
               <CardContent className="p-0">
                 <div className="relative">
                   <img src={imageUrl} alt="Uploaded CT Scan" className="w-full" />
-                  {result && !result.isHealthy && (
+                  {result && (
                     <div
                       className="absolute border-2 border-destructive rounded-md animate-pulse"
                       style={{
@@ -163,61 +163,37 @@ const UploadResults = () => {
             <Card className="glass-card animate-fade-in-up">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 font-display text-foreground">
-                  {result.isHealthy ? (
-                    <ShieldCheck className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <AlertTriangle className="w-5 h-5 text-warning" />
-                  )}
-                  Diagnosis Result
-                </CardTitle>
+                   <AlertTriangle className="w-5 h-5 text-warning" />
+                   Diagnosis Result
+                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {result.isHealthy ? (
-                  <div className="flex items-center justify-between p-4 rounded-xl bg-green-500/10 border border-green-500/20">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Status</p>
-                      <p className="text-xl font-bold text-green-500">No Lung Disease Detected</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Confidence</p>
-                      <p className="text-xl font-bold text-primary">{result.confidence}%</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between p-4 rounded-xl bg-destructive/10 border border-destructive/20">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Detected Disease</p>
-                      <p className="text-xl font-bold text-destructive">{result.disease}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Confidence</p>
-                      <p className="text-xl font-bold text-primary">{result.confidence}%</p>
-                    </div>
-                  </div>
-                )}
+                <div className="flex items-center justify-between p-4 rounded-xl bg-destructive/10 border border-destructive/20">
+                   <div>
+                     <p className="text-sm text-muted-foreground">Detected Disease</p>
+                     <p className="text-xl font-bold text-destructive">{result.disease}</p>
+                   </div>
+                   <div className="text-right">
+                     <p className="text-sm text-muted-foreground">Confidence</p>
+                     <p className="text-xl font-bold text-primary">{result.confidence}%</p>
+                   </div>
+                 </div>
                 <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-1000 ${result.isHealthy ? 'bg-green-500' : 'medical-gradient'}`}
+                    className="h-full rounded-full transition-all duration-1000 medical-gradient"
                     style={{ width: `${result.confidence}%` }}
                   />
                 </div>
-                {!result.isHealthy && (
-                  <p className="text-xs text-muted-foreground">
-                    Affected region highlighted in red on the scan image. Region: ({result.region.x}%, {result.region.y}%) - ({result.region.width}%×{result.region.height}%)
-                  </p>
-                )}
-                {result.isHealthy && (
-                  <p className="text-xs text-muted-foreground">
-                    The AI analysis did not detect any abnormalities in this lung CT scan. Please consult a medical professional for a definitive diagnosis.
-                  </p>
-                )}
+                <p className="text-xs text-muted-foreground">
+                   Affected region highlighted in red on the scan image. Region: ({result.region.x}%, {result.region.y}%) - ({result.region.width}%×{result.region.height}%)
+                 </p>
               </CardContent>
             </Card>
           )}
         </div>
 
         {/* Drug Discovery Panel */}
-        {result && !result.isHealthy && (
+        {result && (
           <div className="space-y-4 animate-slide-in">
             <h2 className="text-xl font-bold font-display text-foreground flex items-center gap-2">
               <FlaskConical className="w-5 h-5 text-primary" />
@@ -275,16 +251,6 @@ const UploadResults = () => {
           </div>
         )}
 
-        {/* Healthy result right panel */}
-        {result && result.isHealthy && (
-          <div className="flex items-center justify-center p-12 animate-fade-in-up">
-            <div className="text-center">
-              <ShieldCheck className="w-20 h-20 text-green-500 mx-auto mb-4" />
-              <p className="text-xl font-bold text-foreground mb-2">Healthy Scan</p>
-              <p className="text-muted-foreground">No abnormalities were detected in this CT scan. No drug recommendations are needed.</p>
-            </div>
-          </div>
-        )}
 
         {!result && !loading && !validating && imageUrl && (
           <div className="flex items-center justify-center text-center p-12">
