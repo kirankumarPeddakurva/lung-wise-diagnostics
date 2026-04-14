@@ -195,43 +195,7 @@ function simpleHash(str: string): number {
   return Math.abs(hash);
 }
 
-/**
- * Computes an abnormality score from image pixel data.
- * Uses pixel variance, dark-region distribution, and edge patterns
- * to determine if lung tissue appears normal or abnormal.
- * Returns a value 0-100 where higher = more abnormal.
- */
-function computeAbnormalityScore(imageDataUrl: string): number {
-  // Sample different parts of the data URL for deterministic analysis
-  const segment1 = imageDataUrl.substring(100, 400);
-  const segment2 = imageDataUrl.substring(400, 700);
-  const segment3 = imageDataUrl.substring(imageDataUrl.length - 500);
-
-  const h1 = simpleHash(segment1);
-  const h2 = simpleHash(segment2);
-  const h3 = simpleHash(segment3);
-
-  // Combine hashes to produce a score 0-100
-  const combined = (h1 * 7 + h2 * 13 + h3 * 19) % 1000;
-  return combined / 10; // 0-99.9
-}
-
-const diseases: Exclude<Disease, "No Lung Disease Detected">[] = ["Lung Cancer", "Pneumonia", "Tuberculosis"];
-
-const regionMap: Record<Exclude<Disease, "No Lung Disease Detected">, { x: number; y: number; width: number; height: number }> = {
-  "Lung Cancer": { x: 55, y: 30, width: 20, height: 22 },
-  "Pneumonia": { x: 25, y: 40, width: 25, height: 20 },
-  "Tuberculosis": { x: 40, y: 25, width: 18, height: 25 },
-};
-
-const confidenceMap: Record<Exclude<Disease, "No Lung Disease Detected">, number> = {
-  "Lung Cancer": 94.7,
-  "Pneumonia": 91.3,
-  "Tuberculosis": 88.9,
-};
-
-// Threshold: below this abnormality score, the scan is considered healthy
-const ABNORMALITY_THRESHOLD = 35;
+const diseases: Disease[] = ["Lung Cancer", "Pneumonia", "Tuberculosis"];
 
 export function diagnoseImage(imageDataUrl: string): Promise<DiagnosisResult> {
   return new Promise((resolve) => {
