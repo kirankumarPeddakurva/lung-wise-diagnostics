@@ -94,17 +94,23 @@ const Dashboard = () => {
         <p className="text-muted-foreground mt-1">AI-powered lung disease diagnosis and drug discovery</p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        {stats.map((stat) => (
-          <Card key={stat.label} className="glass-card animate-fade-in-up">
+      {/* Summary Stats from real scan history */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {summaryStats.map((stat, i) => (
+          <Card
+            key={stat.label}
+            className={cn("glass-card border-2 animate-fade-in-up", stat.borderColor)}
+            style={{ animationDelay: `${i * 0.05}s` }}
+          >
             <CardContent className="flex items-center gap-4 p-5">
-              <div className={`p-3 rounded-xl bg-muted ${stat.color}`}>
+              <div className={cn("p-3 rounded-xl shrink-0", stat.iconBg, stat.iconColor)}>
                 <stat.icon className="w-6 h-6" />
               </div>
-              <div>
-                <p className="text-2xl font-bold font-display text-foreground">{stat.value}</p>
-                <p className="text-sm text-muted-foreground">{stat.label}</p>
+              <div className="min-w-0">
+                <p className="text-3xl font-bold font-display text-foreground leading-tight">
+                  {stat.value}
+                </p>
+                <p className="text-xs sm:text-sm text-muted-foreground">{stat.label}</p>
               </div>
             </CardContent>
           </Card>
