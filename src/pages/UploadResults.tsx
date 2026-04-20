@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-const API_URL = "http://localhost:8000/predict";
+const API_URL = "https://amenity-appendage-herbs.ngrok-free.dev/predict";
 const HISTORY_KEY = "scan_history";
 
 type DiseaseResult = {
@@ -104,10 +104,22 @@ const UploadResults = () => {
       const formData = new FormData();
       formData.append("file", imageFile);
 
-      const res = await fetch(API_URL, { method: "POST", body: formData });
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const response = await fetch(
+        "https://amenity-appendage-herbs.ngrok-free.dev/predict",
+        {
+          method: "POST",
+          headers: {
+            "ngrok-skip-browser-warning": "true"
+          },
+          body: formData
+        }
+      );
 
-      const data: PredictionResponse = await res.json();
+      if (!response.ok) {
+        throw new Error("API call failed");
+      }
+
+      const data: PredictionResponse = await response.json();
       setResults(data);
       saveToHistory(imageFile.name, data);
     } catch (err) {
