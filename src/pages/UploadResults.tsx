@@ -1,31 +1,51 @@
 import { useState, useRef } from "react";
-import { diagnoseImage, saveHistory, type DiagnosisResult } from "@/lib/mockData";
-import { analyzeLungStructure } from "@/lib/lungValidator";
-import MoleculeViewer from "@/components/MoleculeViewer";
-import { Upload, Loader2, AlertTriangle, FlaskConical, Atom, ChevronDown, ChevronUp, XCircle, ScanSearch } from "lucide-react";
+import { Upload, Loader2, AlertTriangle, XCircle, ScanSearch, Activity, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+
+const API_URL = "http://localhost:8000/predict";
+
+type DiseaseResult = {
+  prediction: string;
+  confidence: number;
+  all_scores?: Record<string, number>;
+};
+
+type PredictionResponse = {
+  lung_cancer: DiseaseResult;
+  pneumonia: DiseaseResult;
+  tuberculosis: DiseaseResult;
+};
+
+const DISEASE_META: Record<keyof PredictionResponse, { title: string; normalLabels: string[] }> = {
+  lung_cancer: { title: "Lung Cancer", normalLabels: ["normal", "benign", "no cancer"] },
+  pneumonia: { title: "Pneumonia", normalLabels: ["normal", "no pneumonia"] },
+  tuberculosis: { title: "Tuberculosis", normalLabels: ["normal", "no tb", "no tuberculosis"] },
+};
+
+const isNormal = (key: keyof PredictionResponse, prediction: string) => {
+  const p = prediction.toLowerCase().trim();
+  return DISEASE_META[key].normalLabels.some((n) => p === n || p.includes(n));
+};
 
 const UploadResults = () => {
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [validating, setValidating] = useState(false);
-  const [result, setResult] = useState<DiagnosisResult | null>(null);
-  const [expandedDrug, setExpandedDrug] = useState<number | null>(0);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string>("");
+  const [results, setResults] = useState<PredictionResponse | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = (file: File) => {
-    setValidationError(null);
-    setFileName(file.name);
+    setApiError(null);
+    setImageFile(file);
+    setResults(null);
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      setImageUrl(dataUrl);
-      setResult(null);
-    };
+    reader.onload = (e) => setImageUrl(e.target?.result as string);
     reader.readAsDataURL(file);
   };
 
@@ -36,39 +56,33 @@ const UploadResults = () => {
   };
 
   const runDiagnosis = async () => {
-    if (!imageUrl) return;
-
-    setValidationError(null);
-    setValidating(true);
-
-    // Simulate UNETR segmentation model processing (includes preprocessing)
-    await new Promise((r) => setTimeout(r, 2000));
-    const validation = await analyzeLungStructure(imageUrl);
-    setValidating(false);
-
-    if (!validation.valid) {
-      const msg = validation.rejectionReason === "brain_detected"
-        ? "Invalid input: The image appears to be a non-lung scan (e.g., brain or unrelated). Please upload a valid lung CT scan."
-        : "Invalid input: The uploaded image is not a valid lung CT scan or is not clearly visible. Please upload a proper lung CT image.";
-      setValidationError(msg);
-      return;
-    }
-
+    if (!imageFile) return;
+    setApiError(null);
+    setResults(null);
     setLoading(true);
-    const res = await diagnoseImage(imageUrl);
-    setResult(res);
-    setLoading(false);
-    setExpandedDrug(0);
 
-    saveHistory({
-      id: Date.now().toString(),
-      imageUrl,
-      disease: res.disease,
-      confidence: res.confidence,
-      date: new Date().toISOString(),
-      drugs: res.drugs,
-      region: res.region,
-    });
+    try {
+      const formData = new FormData();
+      formData.append("file", imageFile);
+
+      const res = await fetch(API_URL, { method: "POST", body: formData });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+
+      const data: PredictionResponse = await res.json();
+      setResults(data);
+    } catch (err) {
+      console.error("Prediction API error:", err);
+      setApiError("Could not connect to analysis server. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const clearAll = () => {
+    setImageFile(null);
+    setImageUrl(null);
+    setResults(null);
+    setApiError(null);
   };
 
   return (
@@ -76,7 +90,9 @@ const UploadResults = () => {
       <h1 className="text-3xl font-bold font-display text-foreground mb-2 animate-fade-in-up">
         CT Scan Analysis
       </h1>
-      <p className="text-muted-foreground mb-8 animate-fade-in-up">Upload a lung CT scan for AI-powered diagnosis</p>
+      <p className="text-muted-foreground mb-8 animate-fade-in-up">
+        Upload a lung CT scan for AI-powered diagnosis (Cancer, Pneumonia, TB)
+      </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Upload area */}
@@ -102,46 +118,20 @@ const UploadResults = () => {
           ) : (
             <Card className="glass-card overflow-hidden">
               <CardContent className="p-0">
-                <div className="relative">
-                  <img src={imageUrl} alt="Uploaded CT Scan" className="w-full" />
-                  {result && (
-                    <div
-                      className="absolute border-2 border-destructive rounded-md animate-pulse"
-                      style={{
-                        left: `${result.region.x}%`,
-                        top: `${result.region.y}%`,
-                        width: `${result.region.width}%`,
-                        height: `${result.region.height}%`,
-                        backgroundColor: "rgba(239, 68, 68, 0.25)",
-                        boxShadow: "0 0 15px rgba(239, 68, 68, 0.5)",
-                      }}
-                    >
-                      <span className="absolute -top-6 left-0 text-xs font-bold text-destructive bg-card/90 px-2 py-0.5 rounded">
-                        {result.disease}
-                      </span>
-                    </div>
-                  )}
-                </div>
+                <img src={imageUrl} alt="Uploaded CT Scan" className="w-full" />
                 <div className="p-4 flex gap-3">
-                  <Button onClick={runDiagnosis} disabled={loading || validating} className="flex-1">
-                    {validating ? (
+                  <Button onClick={runDiagnosis} disabled={loading} className="flex-1">
+                    {loading ? (
                       <>
-                        <ScanSearch className="w-4 h-4 mr-2 animate-pulse" /> Analyzing structure...
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Analyzing CT scan...
                       </>
-                    ) : loading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Analyzing...
-                      </>
-                    ) : result ? (
+                    ) : results ? (
                       "Re-analyze"
                     ) : (
                       "Run AI Diagnosis"
                     )}
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => { setImageUrl(null); setResult(null); setValidationError(null); }}
-                  >
+                  <Button variant="outline" onClick={clearAll}>
                     Clear
                   </Button>
                 </div>
@@ -149,137 +139,135 @@ const UploadResults = () => {
             </Card>
           )}
 
-          {/* Validation Error */}
-          {validationError && (
+          {apiError && (
             <Alert variant="destructive" className="animate-fade-in-up">
               <XCircle className="h-4 w-4" />
-              <AlertTitle>Validation Failed</AlertTitle>
-              <AlertDescription>{validationError}</AlertDescription>
+              <AlertTitle>Connection Error</AlertTitle>
+              <AlertDescription>{apiError}</AlertDescription>
             </Alert>
           )}
 
-          {/* Diagnosis Result */}
-          {result && (
+          {loading && (
             <Card className="glass-card animate-fade-in-up">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 font-display text-foreground">
-                   <AlertTriangle className="w-5 h-5 text-warning" />
-                   Diagnosis Result
-                 </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between p-4 rounded-xl bg-destructive/10 border border-destructive/20">
-                   <div>
-                     <p className="text-sm text-muted-foreground">Detected Disease</p>
-                     <p className="text-xl font-bold text-destructive">{result.disease}</p>
-                   </div>
-                   <div className="text-right">
-                     <p className="text-sm text-muted-foreground">Confidence</p>
-                     <p className="text-xl font-bold text-primary">{result.confidence}%</p>
-                   </div>
-                 </div>
-                <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-1000 medical-gradient"
-                    style={{ width: `${result.confidence}%` }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                   Affected region highlighted in red on the scan image. Region: ({result.region.x}%, {result.region.y}%) - ({result.region.width}%×{result.region.height}%)
-                 </p>
+              <CardContent className="flex flex-col items-center justify-center p-8">
+                <ScanSearch className="w-12 h-12 text-primary animate-pulse mb-3" />
+                <p className="text-foreground font-medium">Analyzing CT scan...</p>
+                <p className="text-sm text-muted-foreground">
+                  Running deep learning models on the FastAPI backend
+                </p>
               </CardContent>
             </Card>
           )}
         </div>
 
-        {/* Drug Discovery Panel */}
-        {result && (
-          <div className="space-y-4 animate-slide-in">
-            <h2 className="text-xl font-bold font-display text-foreground flex items-center gap-2">
-              <FlaskConical className="w-5 h-5 text-primary" />
-              Drug Recommendations
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Suggested drugs for <span className="text-primary font-medium">{result.disease}</span>
-            </p>
+        {/* Results panel */}
+        <div className="space-y-4 animate-slide-in">
+          {results ? (
+            <>
+              <h2 className="text-xl font-bold font-display text-foreground flex items-center gap-2">
+                <Activity className="w-5 h-5 text-primary" />
+                Diagnosis Results
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Predictions from three independent models
+              </p>
 
-            {result.drugs.map((drug, i) => (
-              <Card key={drug.name} className="glass-card overflow-hidden">
-                <button
-                  onClick={() => setExpandedDrug(expandedDrug === i ? null : i)}
-                  className="w-full p-4 flex items-center justify-between text-left hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <Atom className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-foreground">{drug.name}</p>
-                      <p className="text-xs text-muted-foreground">{drug.formula}</p>
-                    </div>
-                  </div>
-                  {expandedDrug === i ? (
-                    <ChevronUp className="w-5 h-5 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-muted-foreground" />
-                  )}
-                </button>
+              {(Object.keys(DISEASE_META) as (keyof PredictionResponse)[]).map((key) => {
+                const r = results[key];
+                if (!r) return null;
+                const normal = isNormal(key, r.prediction);
+                const confidence = Math.max(0, Math.min(100, Number(r.confidence) || 0));
 
-                {expandedDrug === i && (
-                  <CardContent className="pt-0 pb-4 px-4 space-y-4 animate-fade-in-up">
-                    <p className="text-sm text-muted-foreground">{drug.description}</p>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="p-3 rounded-lg bg-muted">
-                        <p className="text-xs font-medium text-muted-foreground mb-1">Chemical Formula</p>
-                        <p className="text-sm font-mono font-semibold text-foreground">{drug.formula}</p>
+                return (
+                  <Card
+                    key={key}
+                    className={cn(
+                      "glass-card border-2 transition-all",
+                      normal ? "border-success/60" : "border-destructive/60",
+                    )}
+                  >
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center justify-between font-display text-foreground">
+                        <span className="flex items-center gap-2">
+                          {normal ? (
+                            <CheckCircle2 className="w-5 h-5 text-success" />
+                          ) : (
+                            <AlertTriangle className="w-5 h-5 text-destructive" />
+                          )}
+                          {DISEASE_META[key].title}
+                        </span>
+                        <Badge variant={normal ? "secondary" : "destructive"}>
+                          {normal ? "Normal" : "Detected"}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Prediction</p>
+                        <p
+                          className={cn(
+                            "text-2xl font-bold capitalize",
+                            normal ? "text-success" : "text-destructive",
+                          )}
+                        >
+                          {r.prediction}
+                        </p>
                       </div>
-                      <div className="p-3 rounded-lg bg-muted">
-                        <p className="text-xs font-medium text-muted-foreground mb-1">SMILES Notation</p>
-                        <p className="text-xs font-mono text-foreground break-all">{drug.smiles}</p>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs text-muted-foreground">Confidence</p>
+                          <p className="text-sm font-semibold text-foreground">
+                            {confidence.toFixed(1)}%
+                          </p>
+                        </div>
+                        <Progress value={confidence} className="h-2" />
                       </div>
-                    </div>
 
-                    <div>
-                      <p className="text-sm font-medium text-foreground mb-2">3D Molecule Structure</p>
-                      <MoleculeViewer drug={drug} />
-                    </div>
-                  </CardContent>
-                )}
-              </Card>
-            ))}
-          </div>
-        )}
-
-
-        {!result && !loading && !validating && imageUrl && (
-          <div className="flex items-center justify-center text-center p-12">
-            <div>
-              <Atom className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
-              <p className="text-muted-foreground">Click "Run AI Diagnosis" to analyze the scan</p>
-            </div>
-          </div>
-        )}
-
-        {validating && (
-          <div className="flex items-center justify-center p-12">
-            <div className="text-center">
-              <ScanSearch className="w-16 h-16 text-primary animate-pulse mx-auto mb-4" />
-              <p className="text-foreground font-medium">Analyzing anatomical structure...</p>
-              <p className="text-sm text-muted-foreground">Preprocessing image & running UNETR segmentation model</p>
-            </div>
-          </div>
-        )}
-
-        {loading && (
-          <div className="flex items-center justify-center p-12">
-            <div className="text-center">
-              <Loader2 className="w-16 h-16 text-primary animate-spin mx-auto mb-4" />
-              <p className="text-foreground font-medium">Analyzing CT Scan...</p>
-              <p className="text-sm text-muted-foreground">Running AI disease detection model</p>
-            </div>
-          </div>
-        )}
+                      {r.all_scores && Object.keys(r.all_scores).length > 0 && (
+                        <div className="pt-2 border-t border-border/50">
+                          <p className="text-xs font-medium text-muted-foreground mb-2">
+                            All class scores
+                          </p>
+                          <div className="space-y-1.5">
+                            {Object.entries(r.all_scores).map(([label, score]) => {
+                              const s = Math.max(0, Math.min(100, Number(score) || 0));
+                              return (
+                                <div key={label} className="flex items-center gap-2 text-xs">
+                                  <span className="w-32 truncate capitalize text-muted-foreground">
+                                    {label}
+                                  </span>
+                                  <Progress value={s} className="h-1.5 flex-1" />
+                                  <span className="w-12 text-right font-mono text-foreground">
+                                    {s.toFixed(1)}%
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </>
+          ) : (
+            !loading &&
+            !apiError && (
+              <div className="flex items-center justify-center text-center p-12 h-full">
+                <div>
+                  <Activity className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+                  <p className="text-muted-foreground">
+                    {imageUrl
+                      ? 'Click "Run AI Diagnosis" to analyze the scan'
+                      : "Upload a CT scan to get started"}
+                  </p>
+                </div>
+              </div>
+            )
+          )}
+        </div>
       </div>
     </div>
   );
