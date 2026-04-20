@@ -86,8 +86,23 @@ const UploadResults = () => {
 
   const handleFile = (file: File) => {
     setApiError(null);
-    setImageFile(file);
     setResults(null);
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setApiError("Invalid file type. Please upload a CT scan image (JPEG or PNG).");
+      setImageFile(null);
+      setImageUrl(null);
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      setApiError("File too large. Please upload an image under 10MB.");
+      setImageFile(null);
+      setImageUrl(null);
+      return;
+    }
+
+    setImageFile(file);
     const reader = new FileReader();
     reader.onload = (e) => setImageUrl(e.target?.result as string);
     reader.readAsDataURL(file);
@@ -96,7 +111,7 @@ const UploadResults = () => {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith("image/")) handleFile(file);
+    if (file) handleFile(file);
   };
 
   const runDiagnosis = async () => {
