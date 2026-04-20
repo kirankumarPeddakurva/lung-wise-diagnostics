@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-const API_URL = "http://localhost:8000/predict";
+const API_URL = "https://amenity-appendage-herbs.ngrok-free.dev/predict";
 const HISTORY_KEY = "scan_history";
 
 type DiseaseResult = {
