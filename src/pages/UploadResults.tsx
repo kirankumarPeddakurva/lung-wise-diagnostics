@@ -1,11 +1,16 @@
 import { useState, useRef } from "react";
-import { Upload, Loader2, AlertTriangle, XCircle, ScanSearch, Activity, CheckCircle2 } from "lucide-react";
+import { Upload, Loader2, AlertTriangle, XCircle, ScanSearch, Activity, CheckCircle2, Pill, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import MoleculeViewer from "@/components/MoleculeViewer";
+import { drugDatabase, drugCategoryMap, type DrugDisease } from "@/lib/drugData";
+
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/dicom"];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 const API_URL = "https://amenity-appendage-herbs.ngrok-free.dev/predict";
 const HISTORY_KEY = "scan_history";
