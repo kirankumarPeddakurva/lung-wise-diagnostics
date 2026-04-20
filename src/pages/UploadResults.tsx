@@ -359,6 +359,63 @@ const UploadResults = () => {
           )}
         </div>
       </div>
+
+      {/* Recommended Drug Treatments */}
+      {results && (() => {
+        const cancerDetected = !isNormal("lung_cancer", results.lung_cancer.prediction);
+        const pneumoniaDetected = results.pneumonia.prediction.toUpperCase() === "PNEUMONIA";
+        const tbDetected = results.tuberculosis.prediction.toUpperCase() === "TB";
+
+        let disease: DrugDisease | null = null;
+        if (cancerDetected) disease = "Lung Cancer";
+        else if (pneumoniaDetected) disease = "Pneumonia";
+        else if (tbDetected) disease = "Tuberculosis";
+
+        if (!disease) return null;
+        const drugs = drugDatabase[disease];
+
+        return (
+          <div className="mt-12 animate-fade-in-up">
+            <div className="flex items-center gap-2 mb-1">
+              <Pill className="w-6 h-6 text-primary" />
+              <h2 className="text-2xl font-bold font-display text-foreground">
+                Recommended Drug Treatments
+              </h2>
+            </div>
+            <p className="text-sm text-muted-foreground mb-6">
+              Based on detected condition — consult a physician before use
+            </p>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {drugs.map((drug) => (
+                <Card key={drug.name} className="glass-card flex flex-col">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <CardTitle className="text-xl font-bold font-display text-foreground">
+                          {drug.name}
+                        </CardTitle>
+                        <p className="font-mono text-xs text-muted-foreground mt-1">
+                          {drug.formula}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="shrink-0">
+                        {drugCategoryMap[drug.name] ?? "Medication"}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4 flex-1 flex flex-col">
+                    <p className="text-sm text-muted-foreground">{drug.description}</p>
+                    <div className="mt-auto">
+                      <MoleculeViewer drug={drug} />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
