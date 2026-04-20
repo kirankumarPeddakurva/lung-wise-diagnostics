@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const API_URL = "http://localhost:8000/predict";
+const HISTORY_KEY = "scan_history";
 
 type DiseaseResult = {
   prediction: string;
@@ -22,14 +23,52 @@ type PredictionResponse = {
 };
 
 const DISEASE_META: Record<keyof PredictionResponse, { title: string; normalLabels: string[] }> = {
-  lung_cancer: { title: "Lung Cancer", normalLabels: ["normal", "benign", "no cancer"] },
-  pneumonia: { title: "Pneumonia", normalLabels: ["normal", "no pneumonia"] },
-  tuberculosis: { title: "Tuberculosis", normalLabels: ["normal", "no tb", "no tuberculosis"] },
+  lung_cancer: { title: "Lung Cancer Analysis", normalLabels: ["normal", "benign", "no cancer"] },
+  pneumonia: { title: "Pneumonia Analysis", normalLabels: ["normal", "no pneumonia"] },
+  tuberculosis: { title: "Tuberculosis Analysis", normalLabels: ["normal", "no tb", "no tuberculosis"] },
 };
 
 const isNormal = (key: keyof PredictionResponse, prediction: string) => {
   const p = prediction.toLowerCase().trim();
   return DISEASE_META[key].normalLabels.some((n) => p === n || p.includes(n));
+};
+
+/**
+ * Cleans up lung-cancer class names like
+ *   "squamous.cell.carcinoma_left.hilum_T1_N2_M0_IIIa"
+ * into a friendly display label like "Squamous Cell Carcinoma".
+ */
+export const cleanCancerLabel = (raw: string): string => {
+  if (!raw) return raw;
+  const lower = raw.toLowerCase();
+  if (lower === "normal") return "Normal";
+  if (lower.startsWith("squamous")) return "Squamous Cell Carcinoma";
+  if (lower.startsWith("adenocarcinoma")) return "Adenocarcinoma";
+  if (lower.startsWith("large")) return "Large Cell Carcinoma";
+  // Generic fallback: take portion before first "_", replace dots with spaces, title-case
+  const base = raw.split("_")[0].replace(/\./g, " ");
+  return base.replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+const formatLabel = (key: keyof PredictionResponse, label: string): string => {
+  if (key === "lung_cancer") return cleanCancerLabel(label);
+  return label;
+};
+
+const saveToHistory = (filename: string, results: PredictionResponse) => {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    list.push({
+      id: Date.now(),
+      timestamp: new Date().toISOString(),
+      filename,
+      results,
+    });
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.error("Failed to save scan to history:", e);
+  }
 };
 
 const UploadResults = () => {
@@ -70,9 +109,12 @@ const UploadResults = () => {
 
       const data: PredictionResponse = await res.json();
       setResults(data);
+      saveToHistory(imageFile.name, data);
     } catch (err) {
       console.error("Prediction API error:", err);
-      setApiError("Could not connect to analysis server. Please try again.");
+      setApiError(
+        "Unable to connect to analysis server. Make sure the backend is running on port 8000.",
+      );
     } finally {
       setLoading(false);
     }
@@ -123,7 +165,7 @@ const UploadResults = () => {
                   <Button onClick={runDiagnosis} disabled={loading} className="flex-1">
                     {loading ? (
                       <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Analyzing CT scan...
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Analyzing CT scan with AI...
                       </>
                     ) : results ? (
                       "Re-analyze"
@@ -151,7 +193,7 @@ const UploadResults = () => {
             <Card className="glass-card animate-fade-in-up">
               <CardContent className="flex flex-col items-center justify-center p-8">
                 <ScanSearch className="w-12 h-12 text-primary animate-pulse mb-3" />
-                <p className="text-foreground font-medium">Analyzing CT scan...</p>
+                <p className="text-foreground font-medium">Analyzing CT scan with AI...</p>
                 <p className="text-sm text-muted-foreground">
                   Running deep learning models on the FastAPI backend
                 </p>
@@ -177,6 +219,7 @@ const UploadResults = () => {
                 if (!r) return null;
                 const normal = isNormal(key, r.prediction);
                 const confidence = Math.max(0, Math.min(100, Number(r.confidence) || 0));
+                const displayPrediction = formatLabel(key, r.prediction);
 
                 return (
                   <Card
@@ -196,7 +239,13 @@ const UploadResults = () => {
                           )}
                           {DISEASE_META[key].title}
                         </span>
-                        <Badge variant={normal ? "secondary" : "destructive"}>
+                        <Badge
+                          className={cn(
+                            normal
+                              ? "bg-success text-success-foreground hover:bg-success/90"
+                              : "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+                          )}
+                        >
                           {normal ? "Normal" : "Detected"}
                         </Badge>
                       </CardTitle>
@@ -206,11 +255,11 @@ const UploadResults = () => {
                         <p className="text-xs text-muted-foreground mb-1">Prediction</p>
                         <p
                           className={cn(
-                            "text-2xl font-bold capitalize",
+                            "text-2xl font-bold",
                             normal ? "text-success" : "text-destructive",
                           )}
                         >
-                          {r.prediction}
+                          {displayPrediction}
                         </p>
                       </div>
 
@@ -234,8 +283,8 @@ const UploadResults = () => {
                               const s = Math.max(0, Math.min(100, Number(score) || 0));
                               return (
                                 <div key={label} className="flex items-center gap-2 text-xs">
-                                  <span className="w-32 truncate capitalize text-muted-foreground">
-                                    {label}
+                                  <span className="w-32 truncate text-muted-foreground">
+                                    {formatLabel(key, label)}
                                   </span>
                                   <Progress value={s} className="h-1.5 flex-1" />
                                   <span className="w-12 text-right font-mono text-foreground">
