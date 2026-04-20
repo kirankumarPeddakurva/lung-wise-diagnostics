@@ -169,10 +169,10 @@ const UploadResults = () => {
       </p>
 
       {/* Warning banner */}
-      <Alert className="mb-6 border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-100 animate-fade-in-up">
-        <Info className="h-4 w-4 !text-amber-600" />
-        <AlertTitle className="text-amber-900 dark:text-amber-100">Chest CT scans only</AlertTitle>
-        <AlertDescription className="text-amber-800 dark:text-amber-200">
+      <Alert className="mb-6 border-warning/50 bg-warning/10 animate-fade-in-up">
+        <Info className="h-4 w-4 !text-warning" />
+        <AlertTitle className="text-foreground">Chest CT scans only</AlertTitle>
+        <AlertDescription className="text-muted-foreground">
           Please upload chest CT scan images only. Uploading non-CT scan images will produce inaccurate results.
         </AlertDescription>
       </Alert>
