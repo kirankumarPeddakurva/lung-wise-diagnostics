@@ -1,19 +1,87 @@
 import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { sampleScans, getHistory } from "@/lib/mockData";
 import { getUser } from "@/lib/auth";
-import { Upload, Clock, Activity, Stethoscope, FlaskConical, TrendingUp } from "lucide-react";
+import { Upload, Clock, Activity, AlertTriangle, Wind, Microscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+
+const HISTORY_KEY = "scan_history";
+
+type ScanRecord = {
+  id: number;
+  timestamp: string;
+  filename: string;
+  results: {
+    lung_cancer: { prediction: string; confidence: number };
+    pneumonia: { prediction: string; confidence: number };
+    tuberculosis: { prediction: string; confidence: number };
+  };
+};
+
+const loadScanHistory = (): ScanRecord[] => {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const user = getUser();
   const history = getHistory();
 
-  const stats = [
-    { label: "Total Scans", value: history.length, icon: Activity, color: "text-primary" },
-    { label: "Diseases Detected", value: [...new Set(history.map(h => h.disease))].length, icon: Stethoscope, color: "text-destructive" },
-    { label: "Drugs Explored", value: history.reduce((acc, h) => acc + h.drugs.length, 0), icon: FlaskConical, color: "text-success" },
+  const [scanHistory, setScanHistory] = useState<ScanRecord[]>([]);
+  useEffect(() => {
+    setScanHistory(loadScanHistory());
+  }, []);
+
+  const cancerCount = scanHistory.filter(
+    (s) => s.results?.lung_cancer && s.results.lung_cancer.prediction.toLowerCase() !== "normal",
+  ).length;
+  const pneumoniaCount = scanHistory.filter(
+    (s) => s.results?.pneumonia?.prediction === "PNEUMONIA",
+  ).length;
+  const tbCount = scanHistory.filter((s) => s.results?.tuberculosis?.prediction === "TB").length;
+
+  const summaryStats = [
+    {
+      label: "Total Scans",
+      value: scanHistory.length,
+      icon: Activity,
+      iconBg: "bg-primary/10",
+      iconColor: "text-primary",
+      borderColor: "border-primary/30",
+    },
+    {
+      label: "Cancer Detected",
+      value: cancerCount,
+      icon: AlertTriangle,
+      iconBg: "bg-destructive/10",
+      iconColor: "text-destructive",
+      borderColor: "border-destructive/30",
+    },
+    {
+      label: "Pneumonia Detected",
+      value: pneumoniaCount,
+      icon: Wind,
+      iconBg: "bg-orange-500/10",
+      iconColor: "text-orange-500",
+      borderColor: "border-orange-500/30",
+    },
+    {
+      label: "TB Detected",
+      value: tbCount,
+      icon: Microscope,
+      iconBg: "bg-yellow-500/10",
+      iconColor: "text-yellow-500",
+      borderColor: "border-yellow-500/30",
+    },
   ];
 
   return (
