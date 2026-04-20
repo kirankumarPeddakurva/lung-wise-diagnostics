@@ -1,11 +1,16 @@
 import { useState, useRef } from "react";
-import { Upload, Loader2, AlertTriangle, XCircle, ScanSearch, Activity, CheckCircle2 } from "lucide-react";
+import { Upload, Loader2, AlertTriangle, XCircle, ScanSearch, Activity, CheckCircle2, Pill, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import MoleculeViewer from "@/components/MoleculeViewer";
+import { drugDatabase, drugCategoryMap, type DrugDisease } from "@/lib/drugData";
+
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/dicom"];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 const API_URL = "https://amenity-appendage-herbs.ngrok-free.dev/predict";
 const HISTORY_KEY = "scan_history";
@@ -81,8 +86,23 @@ const UploadResults = () => {
 
   const handleFile = (file: File) => {
     setApiError(null);
-    setImageFile(file);
     setResults(null);
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setApiError("Invalid file type. Please upload a CT scan image (JPEG or PNG).");
+      setImageFile(null);
+      setImageUrl(null);
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      setApiError("File too large. Please upload an image under 10MB.");
+      setImageFile(null);
+      setImageUrl(null);
+      return;
+    }
+
+    setImageFile(file);
     const reader = new FileReader();
     reader.onload = (e) => setImageUrl(e.target?.result as string);
     reader.readAsDataURL(file);
@@ -91,7 +111,7 @@ const UploadResults = () => {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith("image/")) handleFile(file);
+    if (file) handleFile(file);
   };
 
   const runDiagnosis = async () => {
@@ -147,6 +167,15 @@ const UploadResults = () => {
       <p className="text-muted-foreground mb-8 animate-fade-in-up">
         Upload a lung CT scan for AI-powered diagnosis (Cancer, Pneumonia, TB)
       </p>
+
+      {/* Warning banner */}
+      <Alert className="mb-6 border-warning/50 bg-warning/10 animate-fade-in-up">
+        <Info className="h-4 w-4 !text-warning" />
+        <AlertTitle className="text-foreground">Chest CT scans only</AlertTitle>
+        <AlertDescription className="text-muted-foreground">
+          Please upload chest CT scan images only. Uploading non-CT scan images will produce inaccurate results.
+        </AlertDescription>
+      </Alert>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Upload area */}
@@ -330,6 +359,63 @@ const UploadResults = () => {
           )}
         </div>
       </div>
+
+      {/* Recommended Drug Treatments */}
+      {results && (() => {
+        const cancerDetected = !isNormal("lung_cancer", results.lung_cancer.prediction);
+        const pneumoniaDetected = results.pneumonia.prediction.toUpperCase() === "PNEUMONIA";
+        const tbDetected = results.tuberculosis.prediction.toUpperCase() === "TB";
+
+        let disease: DrugDisease | null = null;
+        if (cancerDetected) disease = "Lung Cancer";
+        else if (pneumoniaDetected) disease = "Pneumonia";
+        else if (tbDetected) disease = "Tuberculosis";
+
+        if (!disease) return null;
+        const drugs = drugDatabase[disease];
+
+        return (
+          <div className="mt-12 animate-fade-in-up">
+            <div className="flex items-center gap-2 mb-1">
+              <Pill className="w-6 h-6 text-primary" />
+              <h2 className="text-2xl font-bold font-display text-foreground">
+                Recommended Drug Treatments
+              </h2>
+            </div>
+            <p className="text-sm text-muted-foreground mb-6">
+              Based on detected condition — consult a physician before use
+            </p>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {drugs.map((drug) => (
+                <Card key={drug.name} className="glass-card flex flex-col">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <CardTitle className="text-xl font-bold font-display text-foreground">
+                          {drug.name}
+                        </CardTitle>
+                        <p className="font-mono text-xs text-muted-foreground mt-1">
+                          {drug.formula}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="shrink-0">
+                        {drugCategoryMap[drug.name] ?? "Medication"}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4 flex-1 flex flex-col">
+                    <p className="text-sm text-muted-foreground">{drug.description}</p>
+                    <div className="mt-auto">
+                      <MoleculeViewer drug={drug} />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
